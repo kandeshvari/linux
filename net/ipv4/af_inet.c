@@ -119,7 +119,12 @@
 #include <linux/mroute.h>
 #endif
 
-
+#ifdef CONFIG_CGROUP_RLIM
+#include <linux/cgroup_rlim.h>
+#endif
+#ifdef CONFIG_CGROUP_NET_LIM
+#include <linux/net_lim_cgroup.h>
+#endif
 /* The inetsw table contains everything that inet_create needs to
  * build a new socket.
  */
@@ -427,7 +432,12 @@ int inet_bind(struct socket *sock, struct sockaddr *uaddr, int addr_len)
 	unsigned short snum;
 	int chk_addr_ret;
 	int err;
+#ifdef CONFIG_CGROUP_NET_LIM
+	u32 def_addr = net_lim_get_default_address(get_current());
 
+	if (addr->sin_addr.s_addr == htonl(INADDR_ANY))
+		addr->sin_addr.s_addr = def_addr;
+#endif
 	/* If the socket has its own bind function then use it. (RAW) */
 	if (sk->sk_prot->bind) {
 		err = sk->sk_prot->bind(sk, uaddr, addr_len);
@@ -467,6 +477,20 @@ int inet_bind(struct socket *sock, struct sockaddr *uaddr, int addr_len)
 
 	snum = ntohs(addr->sin_port);
 	err = -EACCES;
+#ifdef CONFIG_CGROUP_NET_LIM
+	// printk("XXX: bind()\n");
+	// if (addr->sin_addr.s_addr != htonl(INADDR_ANY) &&
+	if (!net_lim_check_addr(get_current(), addr->sin_addr.s_addr)) {
+	    	// printk("XXX: catch forbidden address: %pI4\n",
+	    	//        					&addr->sin_addr.s_addr);
+		goto out;
+	}
+
+	if (!net_lim_check_port(get_current(), snum)) {
+		// printk("XXX: catch forbidden port: %d\n", snum);
+		goto out;
+	}
+#endif
 	if (snum && snum < PROT_SOCK &&
 	    !ns_capable(net->user_ns, CAP_NET_BIND_SERVICE))
 		goto out;
@@ -1834,4 +1858,3 @@ static int __init ipv4_proc_init(void)
 #endif /* CONFIG_PROC_FS */
 
 MODULE_ALIAS_NETPROTO(PF_INET);
-

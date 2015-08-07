@@ -6,6 +6,7 @@
  *		Support for INET connection oriented protocols.
  *
  * Authors:	See the TCP sources
+ * TODO: ret
  *
  *		This program is free software; you can redistribute it and/or
  *		modify it under the terms of the GNU General Public License
@@ -24,6 +25,9 @@
 #include <net/tcp_states.h>
 #include <net/xfrm.h>
 #include <net/tcp.h>
+#ifdef CONFIG_CGROUP_NET_LIM
+#include <linux/net_lim_cgroup.h>
+#endif
 
 #ifdef INET_CSK_DEBUG
 const char inet_csk_timer_bug_msg[] = "inet_csk BUG: unknown timer value\n";
@@ -33,6 +37,10 @@ EXPORT_SYMBOL(inet_csk_timer_bug_msg);
 void inet_get_local_port_range(struct net *net, int *low, int *high)
 {
 	unsigned int seq;
+#ifdef CONFIG_CGROUP_NET_LIM
+	net_lim_get_local_port_range(get_current(), low, high);
+	if (*low == -1) {
+#endif
 
 	do {
 		seq = read_seqbegin(&net->ipv4.ip_local_ports.lock);
@@ -40,6 +48,12 @@ void inet_get_local_port_range(struct net *net, int *low, int *high)
 		*low = net->ipv4.ip_local_ports.range[0];
 		*high = net->ipv4.ip_local_ports.range[1];
 	} while (read_seqretry(&net->ipv4.ip_local_ports.lock, seq));
+#ifdef CONFIG_CGROUP_NET_LIM
+	}
+	// printk("XXX: inet_get_local_port_range(): pid: %d low: %d high: %d\n",
+	// 				get_current()->pid, *low, *high);
+#endif
+
 }
 EXPORT_SYMBOL(inet_get_local_port_range);
 
