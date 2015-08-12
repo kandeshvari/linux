@@ -949,6 +949,11 @@ config CGROUP_DEBUG
 
 	  Say N if unsure.
 
+config CGROUP_NET_LIM
+	bool "Network limits cgroup subsystem"
+	help
+	  Provides custom network limits from cgroups
+
 config CGROUP_FREEZER
 	bool "Freezer cgroup subsystem"
 	help

@@ -47,6 +47,10 @@ SUBSYS(net_prio)
 SUBSYS(hugetlb)
 #endif
 
+#if IS_ENABLED(CONFIG_CGROUP_NET_LIM)
+SUBSYS(net_lim)
+#endif
+
 /*
  * The following subsystems are not supported on the default hierarchy.
  */

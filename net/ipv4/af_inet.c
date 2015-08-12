@@ -119,6 +119,9 @@
 #include <linux/mroute.h>
 #endif
 
+#ifdef CONFIG_CGROUP_NET_LIM
+#include <linux/net_lim_cgroup.h>
+#endif
 
 /* The inetsw table contains everything that inet_create needs to
  * build a new socket.
@@ -427,7 +430,12 @@ int inet_bind(struct socket *sock, struct sockaddr *uaddr, int addr_len)
 	unsigned short snum;
 	int chk_addr_ret;
 	int err;
+#ifdef CONFIG_CGROUP_NET_LIM
+	u32 def_addr = net_lim_get_default_address(get_current());
 
+	if (def_addr != 0 && addr->sin_addr.s_addr == htonl(INADDR_ANY))
+		addr->sin_addr.s_addr = def_addr;
+#endif
 	/* If the socket has its own bind function then use it. (RAW) */
 	if (sk->sk_prot->bind) {
 		err = sk->sk_prot->bind(sk, uaddr, addr_len);
@@ -467,6 +475,16 @@ int inet_bind(struct socket *sock, struct sockaddr *uaddr, int addr_len)
 
 	snum = ntohs(addr->sin_port);
 	err = -EACCES;
+#ifdef CONFIG_CGROUP_NET_LIM
+	// if (snum == 0 && !net_lim_zero_port_allowed(get_current()))
+	// 	goto out;
+
+	if (snum !=0 && !net_lim_port_allowed(get_current(), snum))
+		goto out;
+
+	if (!net_lim_addr_allowed(get_current(), addr->sin_addr.s_addr))
+		goto out;
+#endif
 	if (snum && snum < PROT_SOCK &&
 	    !ns_capable(net->user_ns, CAP_NET_BIND_SERVICE))
 		goto out;
@@ -1834,4 +1852,3 @@ static int __init ipv4_proc_init(void)
 #endif /* CONFIG_PROC_FS */
 
 MODULE_ALIAS_NETPROTO(PF_INET);
-
