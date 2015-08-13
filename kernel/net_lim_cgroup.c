@@ -131,14 +131,15 @@ static int extract_port_range(char *str, unsigned int *start, unsigned int *end)
 */
 int extract_address(char *str, u32 *addr)
 {
-	if (strlen(str) > IP_ADDRESS_MAX_LEN)
+	const char *end;
+
+	if (strlen(str) > IP_ADDRESS_MAX_LEN-1)
 		return -EINVAL;
 
-	if (!in4_pton(str, -1, (u8 *)addr, -1, NULL)) {
-		return -EINVAL;
-	}
+	if (in4_pton(str, -1, (u8 *)addr, -1, &end) && !*end)
+		return 0;
 
-	return 0;
+	return -EINVAL;
 }
 
 /*
@@ -180,28 +181,17 @@ static int list_add_address(struct list_head *list_addrs, u32 addr)
 */
 static int parse_ports_list(char *buf, struct list_head *list_ranges)
 {
-	char str[RANGE_MAX_LEN];
-	char *s, *tmp;
+	char *str;
 	u32 low, high;
 	int ret = 0;
 
-	tmp = s = buf;
-	while(*s++ != '\0') {
-		if ((*s == ',') || (*s == '\0')) {
-			if (s-tmp > RANGE_MAX_LEN)
-				return -ERANGE;
-			memset(&str[0], '\0', RANGE_MAX_LEN);
-			strncpy(&str[0], tmp, s-tmp);
+	while ((str = strsep(&buf, ","))) {
+		/* Extract port or region. */
+		if ((ret = extract_port_range(str, &low, &high)))
+			return ret;
 
-			/* Extract port or region. */
-			if ((ret = extract_port_range(str, &low, &high)))
-				return ret;
-
-			if ((ret = list_add_range(list_ranges, low, high)))
-				return ret;
-
-			tmp = s + 1;
-		}
+		if ((ret = list_add_range(list_ranges, low, high)))
+			return ret;
 	}
 
 	return ret;
@@ -212,28 +202,16 @@ static int parse_ports_list(char *buf, struct list_head *list_ranges)
 */
 static int parse_addrs_list(char *buf, struct list_head *list_addrs)
 {
-	char str[IP_ADDRESS_MAX_LEN];
-	char *s, *tmp;
+	char *str;
 	u32 addr;
 	int ret = 0;
+	while ((str = strsep(&buf, ","))) {
+		/* Extract ip address from @str. */
+		if ((ret = extract_address(str, &addr)))
+			return ret;
 
-	tmp = s = buf;
-	while(*s++ != '\0') {
-		if ((*s == ',') || (*s == '\0')) {
-			if (s-tmp > IP_ADDRESS_MAX_LEN)
-				return -EINVAL;
-			memset(&str[0], '\0', IP_ADDRESS_MAX_LEN);
-			strncpy(&str[0], tmp, s-tmp);
-
-			/* Extract ip address from @str. */
-			if ((ret = extract_address(str, &addr)))
-				return ret;
-
-			if ((ret = list_add_address(list_addrs, addr)))
-				return ret;
-
-			tmp = s + 1;
-		}
+		if ((ret = list_add_address(list_addrs, addr)))
+			return ret;
 	}
 	return ret;
 }
